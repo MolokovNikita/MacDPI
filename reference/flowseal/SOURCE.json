@@ -1,0 +1,38 @@
+{
+  "repository": "https://github.com/Flowseal/zapret-discord-youtube",
+  "commit": "176f56dc3f11ce5915c26abcdde903f93d835b64",
+  "files": {
+    "general.bat": {
+      "sha256": "22dff943d6ab2493d6463f6e8d9390b8ccbeceb7e5e87742ecc97704bc2bc185",
+      "bytes": 3326
+    },
+    "general (FAKE TLS AUTO).bat": {
+      "sha256": "bcfdc17e84494169b75ebb906e91465e5d140153d6b924116b2f9fc6740e71a4",
+      "bytes": 4020
+    },
+    "bin/tls_clienthello_4pda_to.bin": {
+      "sha256": "eefeaf09dde8d69b1f176212541f63c68b314a33a335eced99a8a29f17254da8",
+      "bytes": 284
+    },
+    "bin/tls_clienthello_www_google_com.bin": {
+      "sha256": "936c2bee4cfb80aa3c426b2dcbcc834b3fbcd1adb17172959dc569c73a14275c",
+      "bytes": 681
+    },
+    "bin/ACTIVE_DISCORD_UDP.bin": {
+      "bytes": 1200,
+      "sha256": "2fe18b3bd20807d36704d0b072092ee49ae84edca907a4420ab9a0f0f28fddcf"
+    },
+    "bin/stun.bin": {
+      "bytes": 100,
+      "sha256": "9cd5469309780ca56c0bd97266524a48c7ee529d02c3179cfecb20b260a59641"
+    },
+    "bin/stun2.bin": {
+      "bytes": 120,
+      "sha256": "b7c2497496039c541f7337ac8536813f0a1cf52363ab2faa5213b7816d458813"
+    },
+    "bin/quic_initial_www_google_com.bin": {
+      "bytes": 1200,
+      "sha256": "f4589c57749f956bb30538197a521d7005f8b0a8723b4707e72405e51ddac50a"
+    }
+  }
+}

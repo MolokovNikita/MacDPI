@@ -1,0 +1,36 @@
+# Local toolchains and generated bundles
+/.tools/
+/.build/
+/build/
+/.swiftpm/
+
+# macOS and editor state
+.DS_Store
+*.xcuserstate
+xcuserdata/
+.idea/
+.vscode/
+
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Diagnostics and test output
+*.log
+*.test
+coverage.out
+*.prof
+macdpi-report-*.txt
+/daemon/daemon
+
+# Local configuration and signing credentials
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+*.key
+*.mobileprovision
+*.provisionprofile

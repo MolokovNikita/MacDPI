@@ -1,0 +1,4 @@
+TLS/QUIC/STUN protocol test patterns: Flowseal/zapret-discord-youtube.
+Source repository and pinned commit / SHA-256: SOURCE.json.
+Only protocol test payloads are embedded. winws.exe / WinDivert are not bundled.
+The macOS BPF implementation is original MacDPI code and is experimental.
