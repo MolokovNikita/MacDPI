@@ -9,7 +9,11 @@
 
 ## Установка
 
-1. Соберите приложение (см. «Сборка») или возьмите готовый `MacDPI.app`.
+1. Скачайте [MacDPI 0.4.4 для Apple Silicon (M1/M2/M3/M4 и новее)](https://github.com/MolokovNikita/MacDPI/releases/download/v0.4.4/MacDPI-0.4.4-macos-arm64.zip)
+   и распакуйте ZIP — внутри находится `MacDPI.app`.
+   Все выпуски доступны в [GitHub Releases](https://github.com/MolokovNikita/MacDPI/releases).
+   Готовая сборка предназначена для macOS 13+ на Apple Silicon (`arm64`);
+   для Intel соберите приложение из исходников (см. «Сборка»).
 2. Перетащите `MacDPI.app` в «Программы» или выполните из корня проекта:
 
    ```sh
