@@ -125,8 +125,18 @@ func selectStrategy(probe func(Strategy, string) serviceCheck) (Strategy, []serv
 			if discordHost(host) && activePacketEngine.Load() != nil {
 				names = append([]string{"flowseal-general", "flowseal-fake-tls"}, names...)
 			}
+			if profiles := activeProfiles.Load(); profiles != nil {
+				if discordHost(host) {
+					names = profiles.Orders.Discord
+				} else {
+					names = profiles.Orders.YouTube
+				}
+			}
 			for _, name := range names {
 				st, _ := findPreset(name)
+				if st.PacketMode != "" && activePacketEngine.Load() == nil {
+					continue
+				}
 				checks[i] = probe(st, host)
 				if checks[i].HTTPS {
 					break

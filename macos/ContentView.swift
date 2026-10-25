@@ -78,6 +78,21 @@ struct ConnectionView: View {
             Spacer()
 
             GroupedSection {
+                Toggle(isOn: $model.targetOnly) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Только YouTube и Discord").font(.system(size: 13, weight: .medium))
+                        Text(model.active ? "Можно сменить после отключения" : "Остальные сервисы — без обхода")
+                            .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .tint(Color.appTint)
+                .disabled(model.active || model.busy)
+                .padding(.horizontal, 14).padding(.vertical, 12)
+            }.padding(.bottom, 12)
+
+            GroupedSection {
                 ServiceRow(model: model, name: "YouTube", host: "www.youtube.com", icon: "play.fill", color: .red)
                 RowDivider()
                 ServiceRow(model: model, name: "Discord", host: "discord.com",
@@ -202,6 +217,33 @@ struct SettingsView: View {
                 SectionFooter(model.active
                               ? "Режим можно сменить после отключения."
                               : "Автоподбор сам проверит YouTube и Discord и выберет подходящий режим.")
+
+                SectionHeader("Обновления обхода")
+                GroupedSection {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Профили стратегий").font(.system(size: 13.5))
+                            Spacer()
+                            Button(model.checkingUpdates ? "Проверяем…" : "Проверить") { model.checkProfileUpdates() }
+                                .disabled(model.busy || model.checkingUpdates || !model.installed)
+                        }
+                        Text(model.state?.profiles?.active ?? "Встроенные профили")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                        if let profiles = model.state?.profiles {
+                            if let error = profiles.error, !error.isEmpty {
+                                Text("Не удалось обновить: \(error)").font(.system(size: 11)).foregroundStyle(.orange)
+                            } else if let available = profiles.available, available != profiles.active {
+                                Text("Новый профиль применится при следующем подключении")
+                                    .font(.system(size: 11)).foregroundStyle(Color.appTint)
+                            }
+                            if profiles.upstream_changed {
+                                Text("В Flowseal есть новые изменения. Ожидается совместимый профиль для MacDPI.")
+                                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                            }
+                        }
+                    }.padding(16)
+                }
+                SectionFooter("Проверяем автоматически каждые 6 часов. Обновляются только совместимые профили, без перезапуска работающего соединения.")
 
                 SectionHeader("Диагностика")
                 GroupedSection {

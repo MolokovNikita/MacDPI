@@ -51,24 +51,24 @@ func (p *voiceUDPPolicy) before(now time.Time, packet []byte, lastReply time.Tim
 	if !first && !p.fallback && now.Sub(p.started) >= voiceReplyTimeout && now.Sub(lastReply) >= voiceReplyTimeout {
 		p.fallback = true
 		p.lastBurst = now
-		return stunVoiceFake, "stun", "replies-stalled"
+		return profileBytes("stun", stunVoiceFake), "stun", "replies-stalled"
 	}
 	setup := discordDiscovery(packet) || stunPacket(packet)
 	if first || setup && now.Sub(p.lastBurst) >= 500*time.Millisecond {
 		p.lastBurst = now
 		if p.fallback {
-			return stunVoiceFake, "stun", "setup"
+			return profileBytes("stun", stunVoiceFake), "stun", "setup"
 		}
-		return flowsealVoiceFake, "flowseal-quic", "setup"
+		return profileBytes("discord_udp", flowsealVoiceFake), "flowseal-quic", "setup"
 	}
 	return nil, "", ""
 }
 
 func injectedVoiceReply(b []byte) bool {
-	if bytes.Equal(b, flowsealVoiceFake) || bytes.Equal(b, stunVoiceFake) {
+	if bytes.Equal(b, profileBytes("discord_udp", flowsealVoiceFake)) || bytes.Equal(b, profileBytes("stun", stunVoiceFake)) {
 		return true
 	}
-	return stunPacket(b) && bytes.Equal(b[8:20], stunVoiceFake[8:20])
+	return stunPacket(b) && bytes.Equal(b[8:20], profileBytes("stun", stunVoiceFake)[8:20])
 }
 
 // Use the socket's normal TTL, matching Flowseal's default UDP fake behavior.

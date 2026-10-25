@@ -15,6 +15,16 @@ struct HelperState: Decodable {
     let checks: [ServiceCheck]?
     let packet_engine: Bool?
     let packet_error: String?
+    let target_only: Bool?
+    let profiles: ProfileStatus?
+}
+
+struct ProfileStatus: Decodable {
+    let active: String
+    let available: String?
+    let last_checked: String?
+    let error: String?
+    let upstream_changed: Bool
 }
 
 struct ServiceCheck: Decodable {
@@ -37,7 +47,7 @@ struct ServiceCheck: Decodable {
 
 @MainActor
 final class AppModel: ObservableObject {
-    static let helperVersion = 10
+    static let helperVersion = 11
     nonisolated static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
 
     @Published var active = false
@@ -46,8 +56,12 @@ final class AppModel: ObservableObject {
     @Published var status = "Готов к подключению"
     @Published var detail = ""
     @Published var strategy = "auto"
+    @Published var targetOnly = (UserDefaults.standard.object(forKey: "targetOnly") as? Bool) ?? true {
+        didSet { UserDefaults.standard.set(targetOnly, forKey: "targetOnly") }
+    }
     @Published var events = ""
     @Published var exporting = false
+    @Published var checkingUpdates = false
     @Published var state: HelperState?
 
     private let worker = DispatchQueue(label: "local.macdpi.control")
@@ -74,7 +88,7 @@ final class AppModel: ObservableObject {
     }
 
     func refresh() {
-        guard !busy, !polling, !exporting, let binary else { return }
+        guard !busy, !polling, !exporting, !checkingUpdates, let binary else { return }
         polling = true
         let uid = String(getuid())
         worker.async {
@@ -97,7 +111,7 @@ final class AppModel: ObservableObject {
     func toggle() {
         guard !busy, let binary else { return }
         busy = true
-        log("connection action; active=\(active), installed=\(installed), strategy=\(strategy)")
+        log("connection action; active=\(active), installed=\(installed), strategy=\(strategy), targetOnly=\(targetOnly)")
 
         let stopping = active
         let needsInstall = !installed
@@ -112,13 +126,16 @@ final class AppModel: ObservableObject {
         let uid = String(getuid())
         let owner = String(ProcessInfo.processInfo.processIdentifier)
         let selected = strategy
+        let onlyServices = targetOnly
         worker.async {
             do {
                 if needsInstall && !stopping {
                     try Self.installHelper(binary, uid: uid)
                 }
                 let command = stopping ? "stop" : "start"
-                let result = try Self.run(binary, ["--control", command, "--uid", uid, "--owner", owner, "--strategy", selected])
+                var arguments = ["--control", command, "--uid", uid, "--owner", owner, "--strategy", selected]
+                if onlyServices { arguments.append("--target-only") }
+                let result = try Self.run(binary, arguments)
                 if result.code != 0 {
                     let reason = (try? JSONDecoder().decode(HelperState.self, from: result.output))?.error
                         ?? String(data: result.output, encoding: .utf8)
@@ -138,6 +155,21 @@ final class AppModel: ObservableObject {
                     self.detail = error.localizedDescription
                     self.log(error.localizedDescription)
                 }
+            }
+        }
+    }
+
+    func checkProfileUpdates() {
+        guard !checkingUpdates, !busy, let binary else { return }
+        checkingUpdates = true
+        let uid = String(getuid())
+        worker.async {
+            let result = try? Self.run(binary, ["--control", "update-profiles", "--uid", uid])
+            Task { @MainActor in
+                self.checkingUpdates = false
+                if let result, let state = try? JSONDecoder().decode(HelperState.self, from: result.output) {
+                    self.apply(state)
+                } else { self.log("Не удалось проверить обновления профилей") }
             }
         }
     }
@@ -195,6 +227,7 @@ final class AppModel: ObservableObject {
     private func apply(_ result: HelperState) {
         installed = result.version == Self.helperVersion
         active = result.active
+        if result.active, let scoped = result.target_only { targetOnly = scoped }
         state = result
 
         if !installed {

@@ -23,7 +23,7 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 )
 
-const serviceVersion = 10
+const serviceVersion = 11
 
 var createSystemDevice = tun.Open
 var lookupSystemInterface = net.InterfaceByName
@@ -33,6 +33,7 @@ func socketPath(uid int) string { return "/var/run/macdpi-" + strconv.Itoa(uid) 
 type systemState struct {
 	Version      int            `json:"version"`
 	Active       bool           `json:"active"`
+	TargetOnly   bool           `json:"target_only"`
 	Interface    string         `json:"interface,omitempty"`
 	Strategy     string         `json:"strategy,omitempty"`
 	Error        string         `json:"error,omitempty"`
@@ -45,6 +46,7 @@ type systemState struct {
 	Checks       []serviceCheck `json:"checks,omitempty"`
 	PacketEngine bool           `json:"packet_engine"`
 	PacketError  string         `json:"packet_error,omitempty"`
+	Profiles     profileStatus  `json:"profiles"`
 }
 type systemController struct {
 	mu          sync.Mutex
@@ -59,6 +61,7 @@ type systemController struct {
 	checks      []serviceCheck
 	packet      *packetEngine
 	packetError string
+	targetOnly  bool
 }
 
 func (c *systemController) stopPacketEngine() {
@@ -71,9 +74,12 @@ func (c *systemController) stopPacketEngine() {
 
 func (c *systemController) status() systemState {
 	state := systemState{Checks: c.checks, Version: serviceVersion, Active: c.dev != nil, Interface: c.iface, Strategy: c.selected, Error: c.lastError}
+	state.TargetOnly = c.targetOnly
+	state.Profiles = profileService.status()
 	state.PacketEngine = c.packet != nil
 	state.PacketError = c.packetError
 	if c.relay != nil {
+		state.TargetOnly = c.relay.targetOnly
 		state.TCP = c.relay.tcpCount.Load()
 		state.UDP = c.relay.udpCount.Load()
 		state.QUIC = c.relay.quicCount.Load()
@@ -111,8 +117,9 @@ func (c *systemController) stop() error {
 	}
 	return err
 }
-func (c *systemController) start(owner int, strategy string) error {
-	event("system.start.request", map[string]any{"owner": owner, "strategy": strategy})
+func (c *systemController) start(owner int, strategy string, scope ...bool) error {
+	targetOnly := len(scope) > 0 && scope[0]
+	event("system.start.request", map[string]any{"owner": owner, "strategy": strategy, "target_only": len(scope) > 0 && scope[0]})
 	routeSnapshot("before_start")
 	if owner <= 1 || syscall.Kill(owner, 0) != nil {
 		return errors.New("owning application is not running")
@@ -163,9 +170,11 @@ func (c *systemController) start(owner int, strategy string) error {
 			}
 		}()
 	}
+	profileService.activate()
 	if strategy == "auto" {
 		st, c.checks = chooseStrategy()
 	} else {
+		st, _ = findPreset(strategy)
 		c.checks = nil
 	}
 	if err = disableLegacyProxy(name); err != nil {
@@ -174,6 +183,13 @@ func (c *systemController) start(owner int, strategy string) error {
 	event("system.strategy", map[string]any{"selected": st.Name, "checks": c.checks})
 	relay := newSystemRelay(st)
 	relay.adaptive = strategy == "auto"
+	relay.targetOnly = targetOnly
+	if targetOnly {
+		relay.systemResolvers, err = captureSystemResolvers(name)
+		if err != nil {
+			return err
+		}
+	}
 	relay.policy.seed(c.checks)
 	dev, err := createSystemDevice("utun", 1500)
 	if err != nil {
@@ -190,6 +206,7 @@ func (c *systemController) start(owner int, strategy string) error {
 	c.iface = name
 	c.owner = owner
 	c.selected = st.Name
+	c.targetOnly = targetOnly
 	if err = configureSystemTun(dev.Name(), c.ipv6); err == nil {
 		err = switchDNS(name)
 	}
@@ -246,6 +263,16 @@ func (c *systemController) monitor() {
 						transport.CloseIdleConnections()
 					}
 					c.iface = name
+					if c.relay.targetOnly {
+						if servers, err := captureSystemResolvers(name); err == nil {
+							c.relay.setSystemResolvers(servers)
+						} else {
+							c.stop()
+							c.lastError = err.Error()
+							c.mu.Unlock()
+							continue
+						}
+					}
 					if e = switchDNS(name); e != nil {
 						c.lastError = e.Error()
 					}
@@ -265,6 +292,10 @@ func runService(uid int) error {
 	if err := openDiagnostics(); err != nil {
 		return fmt.Errorf("open diagnostics: %w", err)
 	}
+	profileService.activate()
+	profileCtx, profileCancel := context.WithCancel(context.Background())
+	defer profileCancel()
+	go profileService.monitor(profileCtx)
 	c := &systemController{}
 	if err := recoverDNS(); err != nil {
 		c.lastError = err.Error()
@@ -304,6 +335,17 @@ func runService(uid int) error {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		io.WriteString(w, diagnosticReport(state))
 	})
+	mux.HandleFunc("/update-profiles", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "POST required", 405)
+			return
+		}
+		profileService.check(r.Context())
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(c.status())
+	})
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		c.mu.Lock()
 		defer c.mu.Unlock()
@@ -316,8 +358,9 @@ func runService(uid int) error {
 			return
 		}
 		var config struct {
-			Owner    int    `json:"owner"`
-			Strategy string `json:"strategy"`
+			Owner      int    `json:"owner"`
+			Strategy   string `json:"strategy"`
+			TargetOnly bool   `json:"target_only"`
 		}
 		if err := json.NewDecoder(io.LimitReader(r.Body, 2048)).Decode(&config); err != nil {
 			http.Error(w, "invalid config", 400)
@@ -325,7 +368,7 @@ func runService(uid int) error {
 		}
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		if err := c.start(config.Owner, config.Strategy); err != nil {
+		if err := c.start(config.Owner, config.Strategy, config.TargetOnly); err != nil {
 			c.lastError = err.Error()
 			failure("control.start", err, nil)
 			w.WriteHeader(500)
@@ -364,7 +407,7 @@ func runService(uid int) error {
 	return err
 }
 
-func controlRequest(uid int, action string, owner int, strategy string) ([]byte, error) {
+func controlRequest(uid int, action string, owner int, strategy string, scope ...bool) ([]byte, error) {
 	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		connection, err := (&net.Dialer{}).DialContext(ctx, "unix", socketPath(uid))
 		if err != nil {
@@ -380,9 +423,9 @@ func controlRequest(uid int, action string, owner int, strategy string) ([]byte,
 	client := &http.Client{Transport: transport, Timeout: 60 * time.Second}
 	method := "GET"
 	var body io.Reader
-	if action == "start" || action == "stop" {
+	if action == "start" || action == "stop" || action == "update-profiles" {
 		method = "POST"
-		raw, _ := json.Marshal(map[string]any{"owner": owner, "strategy": strategy})
+		raw, _ := json.Marshal(map[string]any{"owner": owner, "strategy": strategy, "target_only": len(scope) > 0 && scope[0]})
 		body = bytes.NewReader(raw)
 	} else if action != "status" && action != "diagnostics" {
 		return nil, errors.New("invalid control command")

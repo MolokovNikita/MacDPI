@@ -72,6 +72,13 @@ var Presets = []Strategy{
 var noStrategy = Strategy{Name: "none", Title: "Без обхода"}
 
 func findPreset(name string) (Strategy, bool) {
+	if profiles := activeProfiles.Load(); profiles != nil {
+		for _, p := range profiles.Strategies {
+			if p.Name == name {
+				return p, true
+			}
+		}
+	}
 	for _, p := range Presets {
 		if p.Name == name {
 			return p, true

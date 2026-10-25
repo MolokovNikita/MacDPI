@@ -28,7 +28,7 @@ type dnsBackup struct {
 var run = runNetworkCommand
 
 func runNetworkCommand(name string, args ...string) (string, error) {
-	paths := map[string]string{"route": "/sbin/route", "ifconfig": "/sbin/ifconfig", "networksetup": "/usr/sbin/networksetup", "dscacheutil": "/usr/bin/dscacheutil", "killall": "/usr/bin/killall"}
+	paths := map[string]string{"route": "/sbin/route", "ifconfig": "/sbin/ifconfig", "networksetup": "/usr/sbin/networksetup", "ipconfig": "/usr/sbin/ipconfig", "dscacheutil": "/usr/bin/dscacheutil", "killall": "/usr/bin/killall"}
 	path, ok := paths[name]
 	if !ok {
 		return "", fmt.Errorf("unsupported network command")

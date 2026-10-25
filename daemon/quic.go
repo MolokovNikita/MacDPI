@@ -89,4 +89,6 @@ func quicInitial(b []byte) bool {
 // Only literal echoes of the injected datagram are filtered. QUIC servers can
 // reply with zero-length destination IDs; filtering by those IDs would lose real
 // responses. The client's QUIC stack authenticates packets with its own keys.
-func injectedQUICEcho(b []byte) bool { return bytes.Equal(b, flowsealQUICFake) }
+func injectedQUICEcho(b []byte) bool {
+	return bytes.Equal(b, profileBytes("quic_google", flowsealQUICFake))
+}

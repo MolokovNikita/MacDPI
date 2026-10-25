@@ -160,11 +160,19 @@ func makeDesyncFrames(h wireHandshake, first []byte, mode string) ([][]byte, err
 	}
 	switch mode {
 	case "seqovl":
-		return sequenceOverlap(h, first, flowseal4pda, 568)
+		overlap := 568
+		if p := activeProfiles.Load(); p != nil {
+			overlap = p.GeneralOverlap
+		}
+		return sequenceOverlap(h, first, profileBytes("tls_general", flowseal4pda), overlap)
 	case "seqovl-google":
-		return sequenceOverlap(h, first, flowsealGoogle, len(flowsealGoogle))
+		overlap := len(flowsealGoogle)
+		if p := activeProfiles.Load(); p != nil {
+			overlap = p.GoogleOverlap
+		}
+		return sequenceOverlap(h, first, profileBytes("tls_google", flowsealGoogle), overlap)
 	case "badseq":
-		packet, err := buildWirePacket(h, flowsealGoogle, h.seq-10000, h.ack-66000)
+		packet, err := buildWirePacket(h, profileBytes("tls_google", flowsealGoogle), h.seq-10000, h.ack-66000)
 		frames := make([][]byte, 6)
 		for i := range frames {
 			frames[i] = packet

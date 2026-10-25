@@ -21,6 +21,7 @@ type strategyPolicy struct {
 	learned          map[string]learnedStrategy
 	discordPreferred string
 	verified         map[string]verifiedEndpoint
+	dnsHints         map[string]dnsAddressHint
 }
 
 type verifiedEndpoint struct {
@@ -42,7 +43,7 @@ func discordHost(host string) bool {
 }
 func videoHost(host string) bool {
 	host = strings.ToLower(strings.TrimSuffix(host, "."))
-	for _, domain := range []string{"youtube.com", "googlevideo.com", "ytimg.com", "ggpht.com"} {
+	for _, domain := range []string{"youtube.com", "youtube-nocookie.com", "youtu.be", "googlevideo.com", "ytimg.com", "ggpht.com", "youtubei.googleapis.com", "yt3.googleusercontent.com"} {
 		if host == domain || strings.HasSuffix(host, "."+domain) {
 			return true
 		}
@@ -62,6 +63,13 @@ func (p *strategyPolicy) candidates(host, address string, base Strategy) []Strat
 		names = []string{"oob", "multisplit", "tcp-sni", "tlsrec-split"}
 		if activePacketEngine.Load() != nil {
 			names = append([]string{"flowseal-general", "flowseal-fake-tls"}, names...)
+		}
+	}
+	if profiles := activeProfiles.Load(); profiles != nil {
+		if discordHost(host) {
+			names = append([]string(nil), profiles.Orders.Discord...)
+		} else if videoHost(host) {
+			names = append([]string(nil), profiles.Orders.YouTube...)
 		}
 	}
 	p.Lock()

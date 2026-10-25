@@ -11,8 +11,8 @@ signed = os.environ.get("SIGNING_IDENTITY", "-") != "-"
 
 common = {
     "CFBundleInfoDictionaryVersion": "6.0",
-    "CFBundleVersion": "11",
-    "CFBundleShortVersionString": "0.4.4",
+    "CFBundleVersion": "12",
+    "CFBundleShortVersionString": "0.5.0",
     "LSMinimumSystemVersion": "13.0",
 }
 

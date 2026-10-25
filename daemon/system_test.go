@@ -107,9 +107,15 @@ func TestSystemUDPVoiceRelay(t *testing.T) {
 	st, _ := findPreset("tlsrec-split")
 	h := newSystemRelay(st)
 	defer h.close()
+	h.targetOnly = true
 	h.HandleUDP(&udpFlow{UDPConn: flow, peer: app.LocalAddr().(*net.UDPAddr), id: targetID(destination.LocalAddr().String())})
-	for _, size := range []int{8, 74, 900, 1200} {
+	for _, size := range []int{8, 20, 74, 900, 1200} {
 		data := bytes.Repeat([]byte{byte(size)}, size)
+		if size == 20 {
+			binary.BigEndian.PutUint16(data, 1)
+			binary.BigEndian.PutUint16(data[2:], 0)
+			binary.BigEndian.PutUint32(data[4:], 0x2112a442)
+		}
 		if size == 74 {
 			binary.BigEndian.PutUint16(data[:2], 1)
 			binary.BigEndian.PutUint16(data[2:4], 70)
@@ -123,6 +129,9 @@ func TestSystemUDPVoiceRelay(t *testing.T) {
 		if e != nil || !bytes.Equal(data, b[:n]) {
 			t.Fatal("UDP changed a datagram", e)
 		}
+		if size == 20 && h.fakeCount.Load() != 0 {
+			t.Fatal("generic STUN received Discord fakes in scoped mode")
+		}
 	}
 	if h.fakeCount.Load() != 6 {
 		t.Fatal("voice fake sequence missing")
@@ -132,6 +141,10 @@ func TestSystemUDPVoiceRelay(t *testing.T) {
 // UDP/443 must pass application datagrams intact while fake replies never
 // reach the client. All datagrams must retain one upstream source port.
 func TestSystemQUICRelay(t *testing.T) {
+	t.Run("all-services", func(t *testing.T) { testQUICRelay(t, false) })
+	t.Run("unrelated-scoped", func(t *testing.T) { testQUICRelay(t, true) })
+}
+func testQUICRelay(t *testing.T, scoped bool) {
 	destination, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
 	if err != nil {
 		t.Fatal(err)
@@ -162,6 +175,7 @@ func TestSystemQUICRelay(t *testing.T) {
 	st, _ := findPreset("tlsrec-split")
 	h := newSystemRelay(st)
 	defer h.close()
+	h.targetOnly = scoped
 	remote, err := net.DialUDP("udp4", nil, destination.LocalAddr().(*net.UDPAddr))
 	if err != nil {
 		t.Fatal(err)
@@ -184,11 +198,15 @@ func TestSystemQUICRelay(t *testing.T) {
 			t.Fatal("UDP/443 payload changed or fake echo leaked", e)
 		}
 	}
-	if h.quicFakes.Load() != 6 || h.quicCount.Load() != 0 || h.fakeCount.Load() != 0 {
+	wantFakes := uint64(6)
+	if scoped {
+		wantFakes = 0
+	}
+	if h.quicFakes.Load() != wantFakes || h.quicCount.Load() != 0 || h.fakeCount.Load() != 0 {
 		t.Fatal("wrong QUIC burst or voice path changed", h.quicFakes.Load(), h.fakeCount.Load())
 	}
 	source := 0
-	for i := 0; i < len(packets)+6; i++ {
+	for i := 0; i < len(packets)+int(wantFakes); i++ {
 		select {
 		case port := <-ports:
 			if source == 0 {

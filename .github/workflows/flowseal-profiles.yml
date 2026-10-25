@@ -1,0 +1,36 @@
+name: Sync compatible Flowseal profiles
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: flowseal-profiles
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: daemon/go.mod
+          cache-dependency-path: daemon/go.sum
+      - name: Check importer
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Import supported changes only
+        run: python3 scripts/sync_flowseal.py
+      - name: Validate profiles and engine regressions
+        working-directory: daemon
+        run: go test -race -timeout 60s ./...
+      - name: Publish compatible profile
+        run: |
+          git add daemon/profiles/default.json daemon/patterns reference/flowseal/SOURCE.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Update compatible Flowseal profiles'
+          git push

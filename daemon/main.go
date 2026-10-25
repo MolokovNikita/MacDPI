@@ -24,6 +24,7 @@ func main() {
 	owner := flag.Int("owner", os.Getppid(), "owning application PID")
 	installer := flag.Bool("install-script", false, "print privileged helper installation script")
 	packetProbe := flag.Bool("packet-probe", false, "probe packet strategies on --interface without changing routes or DNS (root)")
+	targetOnly := flag.Bool("target-only", false, "apply bypass only to YouTube and Discord")
 	flag.Parse()
 	if *packetProbe {
 		if err := runPacketProbe(*iface, flag.Args()); err != nil {
@@ -46,7 +47,7 @@ func main() {
 		return
 	}
 	if *control != "" {
-		raw, err := controlRequest(*uid, *control, *owner, *preset)
+		raw, err := controlRequest(*uid, *control, *owner, *preset, *targetOnly)
 		if len(raw) > 0 {
 			fmt.Print(string(raw))
 		}
