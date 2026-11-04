@@ -1,9 +1,9 @@
 {
   "schema": 1,
-  "revision": 1,
-  "version": "1-176f56dc3f11",
+  "revision": 2,
+  "version": "2-2401b7a13837",
   "min_engine": 11,
-  "source_commit": "176f56dc3f11ce5915c26abcdde903f93d835b64",
+  "source_commit": "2401b7a13837139b0265632464ba563dddbf80d8",
   "strategies": [
     {
       "name": "flowseal-general",
